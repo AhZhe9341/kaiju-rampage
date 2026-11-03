@@ -25,8 +25,8 @@ Build Rage through combat and unleash empowered attacks.
 | Left click | Light attack combo |
 | Hold and release right click | Charged heavy attack |
 | Space | Dodge |
-| Tap E | Spend Energy to activate your ultimate |
-| Hold E | Activate Rage when the Rage meter is full |
+| E | Spend Energy to activate your ultimate |
+| R | Activate Rage when the Rage meter is full |
 | Q | Execute a weakened rival at close range |
 | Tab | Open pending mutation choices |
 | Esc | Pause / Resume |
@@ -49,11 +49,15 @@ Keyboard bindings can be adjusted in Settings.
 Energy powers your ultimate ability.
 
 Rage builds through effective combat and destruction.
-At full Rage, hold E to enter a 15-second empowered state,
+At full Rage, press R to enter a 15-second empowered state,
 followed by 5 seconds of overheat.
 
 Activating Rage preserves your Energy. During Rage,
 ultimates still consume Energy and use their empowered versions.
+
+Military Energy Centers are tactical power facilities. Destroying one disrupts
+military power for 15 seconds and grants only the normal destruction-based Rage.
+It does not unlock Rage mode, refill Energy, or grant special Rage.
 
 ## How to Play
 
