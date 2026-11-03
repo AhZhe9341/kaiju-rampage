@@ -11,6 +11,8 @@ Build Rage through combat and unleash empowered attacks.
 - Three playable titans with distinct combat styles
 - Three districts: Downtown, Industrial Harbor, and Residential
 - Four modes: Rampage, Blitz, Survival, and Endless
+- Standard and Hard difficulty with separate records
+- Coordinated military movement, reinforced buildings, and escalating pressure
 - Independent Energy and Rage resources
 - Destructible buildings, rival titan invasions, and in-run mutations
 - Chinese and English interfaces
@@ -58,6 +60,23 @@ ultimates still consume Energy and use their empowered versions.
 Military Energy Centers are tactical power facilities. Destroying one disrupts
 military power for 15 seconds and grants only the normal destruction-based Rage.
 It does not unlock Rage mode, refill Energy, or grant special Rage.
+
+## Difficulty and Tactics
+
+Choose Standard or Hard during deployment. Both increase alert through elapsed
+time, destruction, and military defeats. Hard escalates faster, has a larger
+reinforcement cap, shorter breaks, and scarcer healing.
+
+Heavy melee is more effective against reinforced tall buildings and landmarks.
+Energy regenerates slowly; effective hits are the primary source. Building
+destruction grants less Rage than combat. Existing enemies remain active during
+respite, while heavy targeting and new reinforcements pause. Prolonged disengagement
+can trigger an airstrike with a three-second warning.
+
+Supply trucks restore 10% HP on Standard or 8% on Hard. Endless medical caches
+restore 6% or 4% respectively and remain unconsumed at full health.
+
+New records are separated by difficulty; earlier records are retained in local storage.
 
 ## How to Play
 
