@@ -61,6 +61,31 @@ Military Energy Centers are tactical power facilities. Destroying one disrupts
 military power for 15 seconds and grants only the normal destruction-based Rage.
 It does not unlock Rage mode, refill Energy, or grant special Rage.
 
+## Boss Encounters
+
+Rampage offers an optional Challenge Boss button. Survival introduces a Boss
+after 90 seconds; the original 180-second survival objective remains. Endless
+introduces its first Boss after 90 seconds and allows a three-minute break
+after a Boss defeat. Blitz keeps ordinary rival invasions.
+
+Bosses use pursuit, sweeping, and area attacks with marked windups. Below half
+health their attack order changes. Recovery takes 40% extra damage. Military
+heavy units stop opening new attacks against the player during Boss windups
+and attacks; already-fired projectiles remain dangerous. Execution and the
+existing first-rival mutation reward are shared, with no duplicate rewards.
+
+## Mutations
+
+Destroy landmarks to queue a choice, then press Tab when ready. The first rival
+defeat also grants a choice. Standard modes allow up to 3 distinct mutations;
+Endless allows 5, with extra opportunities at 2 and 4 minutes. Rewards beyond
+the cap are not queued. Choices never repeat, and closing the menu preserves
+the same offer. All mutations reset for a new run.
+
+Mechanisms include delayed heavy-hit aftershocks, third-combo shockwaves,
+dodge-followup lunges, and a third-combo pull against military units. The HUD
+lists acquired mutations. Q remains an execution key.
+
 ## Difficulty and Tactics
 
 Choose Standard or Hard during deployment. Both increase alert through elapsed

@@ -37,7 +37,7 @@ Q：仅用于近距离终结虚弱敌兽
 ESC：暂停 / 继续
 H：显示 / 收起操作说明</p></div><div id="settings-about" class="setting settingsPage hidden"><p class="intro">非官方爱好者原型。巨兽视觉受经典怪兽电影启发；属性、连招及过热规则为本游戏设计，不代表电影官方设定。</p><p class="intro">怒气与能量独立：有效战斗积累怒气，满后按 R 狂暴 15 秒，随后过热 5 秒。狂暴保留能量，大招消耗原有能量，过热后可重新积累怒气。</p></div><p class="intro">设置自动保存在本机。游戏中打开设置会暂停行动。</p><button class="primary" onclick="settings(false)">完成设置</button></div></div>
 <div id="briefingModal" class="modal hidden" style="z-index:25"><div class="panel debrief"><div class="eyebrow">OPERATION BRIEFING</div><h2 id="briefingTitle"></h2><p id="briefingBody" class="intro"></p><p class="intro">黄色线表示正在瞄准，红圈表示即将开火。移动离开锁定点，或用 空格闪避。橙色电厂带有闪电标记。</p><div class="brief-actions"><button class="primary" onclick="beginTraining()">开始引导训练</button><button onclick="dismissBriefing()">跳过训练，直接行动</button></div></div></div><div id="trainingPanel" class="hidden"><b id="trainingText"></b><button onclick="skipTraining()">跳过训练</button></div>
-<button id="mutationBadge" class="gameHUD hidden" onclick="openMutationManual()"><span id="mutationBadgeText">突变就绪 [TAB]</span></button><div id="mutationModal" class="modal hidden" style="z-index:45"><main class="panel debrief"><div class="eyebrow">LANDMARK MUTATION</div><h2>选择本局突变</h2><p class="intro">行动已暂停。每局最多两次，选择立即生效。</p><p id="mutationArming" class="intro" role="status"></p><div class="holdTrack"><div id="mutationArmProgress"></div></div><div class="mutationOptions"><button id="mutation-0" onclick="chooseMutation(0)"></button><button id="mutation-1" onclick="chooseMutation(1)"></button><button id="mutation-2" onclick="chooseMutation(2)"></button></div><button onclick="closeMutationManual()" style="margin-top:16px">TAB / ESC · 稍后选择 / Choose later</button></main></div><script>
+<button id="bossChallengeButton" class="gameHUD hidden" onclick="requestBossBattle()" style="position:fixed;left:24px;bottom:285px;z-index:6">迎战巨兽 Boss / Challenge Boss</button><button id="mutationBadge" class="gameHUD hidden" onclick="openMutationManual()"><span id="mutationBadgeText">突变就绪 [TAB]</span></button><div id="mutationModal" class="modal hidden" style="z-index:45"><main class="panel debrief"><div class="eyebrow">LANDMARK MUTATION</div><h2>选择本局突变</h2><p class="intro">行动已暂停。选择立即生效；普通模式最多 3 项，无尽模式最多 5 项。</p><p id="mutationArming" class="intro" role="status"></p><div class="holdTrack"><div id="mutationArmProgress"></div></div><div class="mutationOptions"><button id="mutation-0" onclick="chooseMutation(0)"></button><button id="mutation-1" onclick="chooseMutation(1)"></button><button id="mutation-2" onclick="chooseMutation(2)"></button></div><button onclick="closeMutationManual()" style="margin-top:16px">TAB / ESC · 稍后选择 / Choose later</button></main></div><script>
 /**
  * 2.5D ISOMETRIC KAIJU CITY RAMPAGE ENGINE
  * Full mathematical isometric projection, depth-sorted rendering, procedural audio, progressive destruction.
@@ -1540,15 +1540,16 @@ class IsoProjectile {
     this.life = 100;
   }
   update() {
+    const oldX=this.wx,oldY=this.wy,oldZ=this.wz;
     this.wx += this.vx;
     this.wy += this.vy;
     this.life--;
-
     this.wz += this.vz;
-
-    // Impact with Player
-    const dist = Math.hypot(player.wx - this.wx, player.wy - this.wy);
-    if (dist < player.size && Math.abs(player.z - this.wz) < 35) {
+    // Swept 3D segment test: fast shots must not skip over the hit volume.
+    const lengthSq=this.vx*this.vx+this.vy*this.vy;
+    const t=lengthSq?Math.max(0,Math.min(1,((player.wx-oldX)*this.vx+(player.wy-oldY)*this.vy)/lengthSq)):0;
+    const dist=Math.hypot(player.wx-(oldX+this.vx*t),player.wy-(oldY+this.vy*t));
+    if (dist < player.size && Math.abs(player.z-(oldZ+this.vz*t)) < 35) {
       lastDamageKind=this.sourceKind||'unknown';
       player.takeDamage(this.damage);
       this.life = 0;
@@ -2045,7 +2046,7 @@ window.addEventListener('keydown',e=>{});
 const damageBase=Kaiju.prototype.takeDamage;
 Kaiju.prototype.takeDamage=function(raw){if(dodgeTicks>0||!gameActive)return;const d=Math.min(this.hp,Math.max(1,raw-this.armor));damageTaken+=d;damageSources[lastDamageKind]=(damageSources[lastDamageKind]||0)+d;damageBase.call(this,raw);};
 const simulationBase=simulate;
-simulate=function(){if(!gameActive||paused){simulationBase();return;}missionTicks++;if(powerTicks>0)powerTicks--;if(dodgeCooldown>0)dodgeCooldown--;if(toastTicks>0&&!--toastTicks)document.getElementById('notice').textContent='';if(dodgeTicks>0){dodgeTicks--;player.moveWithCornerSliding(player.dodgeX*7,player.dodgeY*7);}for(const w of warnings){w.ticks--;if(w.ticks===0&&!w.unit.dead&&!(powerTicks>0&&['tank','maser'].includes(w.unit.kind))){const u=w.unit;u.angle=Math.atan2(w.y-u.wy,w.x-u.wx);const before=projectiles.length;shootBase.call(u,Math.hypot(w.x-u.wx,w.y-u.wy));for(let i=before;i<projectiles.length;i++){projectiles[i].sourceKind=u.kind;projectiles[i].vz=(w.z-projectiles[i].wz)/Math.max(1,Math.hypot(w.x-u.wx,w.y-u.wy)/Math.hypot(projectiles[i].vx,projectiles[i].vy));}}}warnings=warnings.filter(w=>w.ticks>0&&!w.unit.dead).slice(-40);
+simulate=function(){if(!gameActive||paused){simulationBase();return;}missionTicks++;if(powerTicks>0)powerTicks--;if(dodgeCooldown>0)dodgeCooldown--;if(toastTicks>0&&!--toastTicks)document.getElementById('notice').textContent='';if(dodgeTicks>0){dodgeTicks--;player.moveWithCornerSliding(player.dodgeX*7,player.dodgeY*7);}for(const w of warnings){w.ticks--;if(w.ticks===0&&!w.unit.dead&&!(powerTicks>0&&['tank','maser'].includes(w.unit.kind))){const u=w.unit;u.angle=Math.atan2(w.y-u.wy,w.x-u.wx);const before=projectiles.length;shootBase.call(u,Math.hypot(w.x-u.wx,w.y-u.wy));for(let i=before;i<projectiles.length;i++){projectiles[i].sourceKind=u.kind;projectiles[i].life=Math.min(240,Math.max(100,Math.ceil(Math.hypot(w.x-u.wx,w.y-u.wy)/Math.hypot(projectiles[i].vx,projectiles[i].vy))+30));projectiles[i].vz=(w.z-projectiles[i].wz)/Math.max(1,Math.hypot(w.x-u.wx,w.y-u.wy)/Math.hypot(projectiles[i].vx,projectiles[i].vy));}}}warnings=warnings.filter(w=>w.ticks>0&&!w.unit.dead).slice(-40);
  simulationBase();peakCombo=Math.max(peakCombo,comboMultiplier);const ratio=leveledBuildings/(buildings.length||1);if(gameActive&&activeMode==='blitz'&&ratio>=.5)endGame(true);else if(gameActive&&missionTicks>=10800&&['blitz','survival'].includes(activeMode))endGame(activeMode==='survival');const left=Math.max(0,180-Math.floor(missionTicks/60));document.getElementById('missionStatus').textContent=`${titles[activeMode]} · ${activeMode==='rampage'?Math.floor(missionTicks/60)+' 秒':left+' 秒剩余'} ｜ 闪避 ${dodgeCooldown?Math.ceil(dodgeCooldown/60)+'s':'就绪 [SPACE]'}\n电厂 ${powerKills} · 最高连击 ${peakCombo.toFixed(1)}x${powerTicks?' · 断电 '+Math.ceil(powerTicks/60)+'s':''}${activeChallenge!=='none'?' · 挑战'+(challengePassed()?'达标':'进行中'):''}`;
 };
 const dispatchBase=dispatchMilitaryReinforcements;
@@ -2374,7 +2375,7 @@ Kaiju.prototype.executeKongLandingShockwave=function(){rivalLanding.call(this);i
 const rivalPlant=IsoBuilding.prototype.collapse;
 IsoBuilding.prototype.collapse=function(x,y){const first=!this.destroyed;rivalPlant.call(this,x,y);if(first&&this.type==='powerplant'&&rival&&Math.hypot(rival.wx-this.wx,rival.wy-this.wy)<240){rival.takeDamage(300,this.wx,this.wy);rival.state='recover';rival.timer=100;}};
 const rivalRender=render;
-render=function(){rivalRender();if(!gameActive)return;const box=document.getElementById('rivalPanel');box.classList.toggle('hidden',!rival&&!invasionPending);if(!rival&&!invasionPending)return;ctx.save();ctx.translate(-camera.x,-camera.y);const p=invasionPending;if(p){document.getElementById('rivalTitle').textContent='入侵预警 · '+rivalNames[p.type]+' · '+Math.ceil(p.ticks/60)+'s';document.getElementById('rivalHealth').style.width='100%';document.getElementById('rivalHint').textContent='地图红色菱形为入侵位置；可提前远离。';}if(rival){document.getElementById('rivalTitle').textContent='敌方 '+rivalNames[rival.type]+' · '+Math.ceil(rival.hp)+' / '+rival.maxHp;document.getElementById('rivalHealth').style.width=rival.hp/rival.maxHp*100+'%';document.getElementById('rivalHint').textContent=rival.state==='recover'?'反击窗口：伤害提升 40%':rival.type==='godzilla'?'射线蓄力时绕侧，攻击结束后反击':rival.type==='kong'?'离开落地红圈，落地后有较长硬直':'闪出俯冲路线，低空停留时反击';if(rival.state==='windup'||rival.state==='attack'&&rival.type!=='godzilla'){const r=rival,q=worldToScreen(r.target.x,r.target.y,0),o=r.type==='godzilla'?worldToScreen(titanMouth(r).wx,titanMouth(r).wy,titanMouth(r).wz):worldToScreen(r.wx,r.wy,r.z);ctx.strokeStyle=r.state==='windup'?'#ffc77b':'#ff746d';ctx.lineWidth=r.type==='godzilla'&&r.state==='attack'?15:3;ctx.setLineDash(r.state==='windup'?[7,6]:[]);ctx.beginPath();if(r.type==='kong')ctx.ellipse(q.x,q.y,145,72,0,0,Math.PI*2);else{ctx.moveTo(o.x,o.y);const e=worldToScreen(r.wx+Math.cos(r.angle)*640,r.wy+Math.sin(r.angle)*640,r.type==='godzilla'?14:r.z);ctx.lineTo(e.x,e.y);}ctx.stroke();}}ctx.restore();if(radarCtx){const q=rival||invasionPending,x=q.wx??q.x,y=q.wy??q.y;radarCtx.fillStyle='#ff777d';const a=x*160/MAP_SIZE_X,b=y*160/MAP_SIZE_Y;radarCtx.beginPath();radarCtx.moveTo(a,b-5);radarCtx.lineTo(a+5,b);radarCtx.lineTo(a,b+5);radarCtx.lineTo(a-5,b);radarCtx.closePath();radarCtx.fill();}};
+render=function(){rivalRender();if(!gameActive)return;const box=document.getElementById('rivalPanel');box.classList.toggle('hidden',!rival&&!invasionPending);if(!rival&&!invasionPending)return;ctx.save();ctx.translate(-camera.x,-camera.y);const p=invasionPending;if(p){document.getElementById('rivalTitle').textContent='入侵预警 · '+rivalNames[p.type]+' · '+Math.ceil(p.ticks/60)+'s';document.getElementById('rivalHealth').style.width='100%';document.getElementById('rivalHint').textContent='地图红色菱形为入侵位置；可提前远离。';}if(rival){document.getElementById('rivalTitle').textContent='敌方 '+rivalNames[rival.type]+' · '+Math.ceil(rival.hp)+' / '+rival.maxHp;document.getElementById('rivalHealth').style.width=rival.hp/rival.maxHp*100+'%';document.getElementById('rivalHint').textContent=rival.state==='recover'?'反击窗口：伤害提升 40%':rival.type==='godzilla'?'射线蓄力时绕侧，攻击结束后反击':rival.type==='kong'?'离开落地红圈，落地后有较长硬直':'闪出俯冲路线，低空停留时反击';if(!rival.boss&&(rival.state==='windup'||rival.state==='attack'&&rival.type!=='godzilla')){const r=rival,q=worldToScreen(r.target.x,r.target.y,0),o=r.type==='godzilla'?worldToScreen(titanMouth(r).wx,titanMouth(r).wy,titanMouth(r).wz):worldToScreen(r.wx,r.wy,r.z);ctx.strokeStyle=r.state==='windup'?'#ffc77b':'#ff746d';ctx.lineWidth=r.type==='godzilla'&&r.state==='attack'?15:3;ctx.setLineDash(r.state==='windup'?[7,6]:[]);ctx.beginPath();if(r.type==='kong')ctx.ellipse(q.x,q.y,145,72,0,0,Math.PI*2);else{ctx.moveTo(o.x,o.y);const e=worldToScreen(r.wx+Math.cos(r.angle)*640,r.wy+Math.sin(r.angle)*640,r.type==='godzilla'?14:r.z);ctx.lineTo(e.x,e.y);}ctx.stroke();}}ctx.restore();if(radarCtx){const q=rival||invasionPending,x=q.wx??q.x,y=q.wy??q.y;radarCtx.fillStyle='#ff777d';const a=x*160/MAP_SIZE_X,b=y*160/MAP_SIZE_Y;radarCtx.beginPath();radarCtx.moveTo(a,b-5);radarCtx.lineTo(a+5,b);radarCtx.lineTo(a,b+5);radarCtx.lineTo(a-5,b);radarCtx.closePath();radarCtx.fill();}};
 const rivalEnd=endGame;
 endGame=function(w){const active=gameActive;rivalEnd(w);if(active){document.getElementById('extendedReport').textContent+='\n巨兽入侵 '+invasionCount+' 次 · 击退 '+rivalsDefeated+' 只';document.getElementById('rivalPanel').classList.add('hidden');}};
 
@@ -2393,15 +2394,15 @@ function interactEnvironment(){if(!gameActive||paused||interactionCooldown)retur
  const near=debrisList.filter(d=>d.active&&Math.hypot(d.wx-player.wx,d.wy-player.wy)<150).sort((a,b)=>Math.hypot(a.wx-player.wx,a.wy-player.wy)-Math.hypot(b.wx-player.wx,b.wy-player.wy));if(!near.length){toast('靠近可用残骸，按 Q 使用。');return;}interactionCooldown=45;const a=player.aimAngle;if(player.type==='kong'){const d=near[0];d.kick(a,24);d.vz=10;d.power=240;toast('金刚：重型残骸投掷');}else if(player.type==='godzilla'){near.slice(0,3).forEach(d=>{d.kick(a,22);d.power=190;});toast('哥斯拉：尾扫弹射残骸');}else near.slice(0,5).forEach((d,i,arr)=>{d.kick(a+(i-(arr.length-1)/2)*.2,19);d.power=125;});}
 function inDust(x,y){return dustClouds.some(d=>d.life>0&&Math.hypot(d.x-x,d.y-y)<d.r);}
 const ecologyCollapse=IsoBuilding.prototype.collapse;
-IsoBuilding.prototype.collapse=function(x,y){if(this.destroyed)return;const near=Math.hypot(this.wx-player.wx,this.wy-player.wy)<420;ecologyCollapse.call(this,x,y);dustClouds.push({x:this.wx,y:this.wy,r:110,life:180});if(near){collapseTimes=collapseTimes.filter(t=>missionTicks-t<=180);collapseTimes.push(missionTicks);playerThreat+=30;if(collapseTimes.length>=2)rubbleTicks=armorDuration;}else if(rival&&Math.hypot(this.wx-rival.wx,this.wy-rival.wy)<300)rivalThreat+=30;if(this.landmark&&mutationCount+mutationQueue<2){mutationQueue++;toast(interfaceLanguage==='en'?'Landmark destroyed! Press TAB to choose a mutation.':'地标被摧毁！按 TAB 领取突变。');}};
+IsoBuilding.prototype.collapse=function(x,y){if(this.destroyed)return;const near=Math.hypot(this.wx-player.wx,this.wy-player.wy)<420;ecologyCollapse.call(this,x,y);dustClouds.push({x:this.wx,y:this.wy,r:110,life:180});if(near){collapseTimes=collapseTimes.filter(t=>missionTicks-t<=180);collapseTimes.push(missionTicks);playerThreat+=30;if(collapseTimes.length>=2)rubbleTicks=armorDuration;}else if(rival&&Math.hypot(this.wx-rival.wx,this.wy-rival.wy)<300)rivalThreat+=30;if(this.landmark&&mutationCount+mutationQueue<mutationLimit()){mutationQueue++;toast(interfaceLanguage==='en'?'Landmark destroyed! Press TAB to choose a mutation.':'地标被摧毁！按 TAB 领取突变。');}};
 const ecologyDamage=Kaiju.prototype.takeDamage;
 Kaiju.prototype.takeDamage=function(n){ecologyDamage.call(this,rubbleTicks>0?Math.max(1,n*.85):n);};
 const ecologyStrike=strikeHit;
 strikeHit=function(k,s){playerThreat+=s.heavy?12:5;ecologyStrike(k,s);};
 // Heavy bonus is applied at damage construction, not by repeating hit tests.
-const choices=[{id:'impact',name:'动能强化',text:'重击伤害提高 20%。',apply(){heavyBonus+=.2;}},{id:'reserve',name:'能量回收',text:'每次命中攻击额外回复 2 点能量。',apply(){energyBonus+=2;}},{id:'shell',name:'残骸固化',text:'连续拆楼获得的石甲持续时间延长 2 秒。',apply(){armorDuration+=120;}},{id:'mobility',name:'肌腱进化',text:'移动速度提高 10%。',apply(){player.speed*=1.1;}}];
+const choices=[{id:'impact',name:'断层余震',text:'重击命中后，0.25 秒后追加地面余震（冷却 2 秒）。',apply(){aftershockMutation=true;}},{id:'reserve',name:'能量回收',text:'每次命中攻击额外回复 2 点能量。',apply(){energyBonus+=2;}},{id:'shell',name:'残骸固化',text:'连续拆楼获得的石甲持续时间延长 2 秒。',apply(){armorDuration+=120;}},{id:'mobility',name:'肌腱进化',text:'移动速度提高 10%。',apply(){player.speed*=1.1;}}];
 let offeredMutations=[];
-function openMutation(){if(!gameActive||training||!mutationQueue||mutationCount>=2)return;mutationQueue--;paused=true;clearInput();offeredMutations=choices.slice().sort(()=>Math.random()-.5).slice(0,3);for(let i=0;i<3;i++){document.getElementById('mutation-'+i).textContent=offeredMutations[i].name+' — '+offeredMutations[i].text;}document.getElementById('mutationModal').classList.remove('hidden');}
+function openMutation(){if(!gameActive||training||!mutationQueue||mutationCount>=mutationLimit())return;mutationQueue--;paused=true;clearInput();offeredMutations=choices.slice().sort(()=>Math.random()-.5).slice(0,3);for(let i=0;i<3;i++){document.getElementById('mutation-'+i).textContent=offeredMutations[i].name+' — '+offeredMutations[i].text;}document.getElementById('mutationModal').classList.remove('hidden');}
 function chooseMutation(i){const choice=offeredMutations[i];if(!choice||!paused)return;choice.apply();mutations.push(choice.name);mutationCount++;offeredMutations=[];document.getElementById('mutationModal').classList.add('hidden');paused=false;toast('本局突变：'+choice.name);}
 const landmarkCity=generateIsometricCity;
 generateIsometricCity=function(){landmarkCity();const candidates=buildings.filter(b=>b.type!=='powerplant'&&b.maxHeightZ>35);for(let i=0;i<3&&i<candidates.length;i++){const b=candidates[Math.floor(i*candidates.length/3)];b.landmark=['市政中心','通讯枢纽','能源研究所'][i];b.topColor='#728e91';b.maxHp*=1.35;b.hp=b.maxHp;}};
@@ -2495,8 +2496,15 @@ endGame=function(w){const a=gameActive;burstEnd(w);if(a)document.getElementById(
 
 // Bounded comeback assistance with a single final-damage accounting path.
 let deathsDoorUsed=false,deathsDoorTicks=0,leechTicks=0,leechRecovered=0,playerDamageScope=0,moveCancelLatch=false,frenzyActive=false;
+// Threat hits have a meaningful HP cost, while police remain light harassment.
+function pressureIncomingDamage(raw,k){
+ const fractions={tank:.018,heli:.015,jet:.024,maser:.03,rival:.028,airraid:.045};
+ const floor=fractions[lastDamageKind];if(!floor||raw<=0)return raw;
+ const hard=challengeDifficulty==='hard';
+ return Math.max(raw*(hard?1.8:1.4),k.armor+k.maxHp*floor*(hard?1.3:1));
+}
 function effectivePlayerDamage(raw,k=player){return Math.max(1,Math.max(1,raw*(rubbleTicks>0?.85:1))-k.armor);}
-Kaiju.prototype.takeDamage=function(raw){if(!gameActive||this.hp<=0||deathsDoorTicks>0||dodgeTicks>0||!Number.isFinite(raw))return;const final=effectivePlayerDamage(raw,this);const lethal=final>=this.hp;const door=lethal&&!deathsDoorUsed&&!burstTicks&&!overheatTicks&&this.hp>this.maxHp*.15;const actual=door?this.hp-1:Math.min(this.hp,final);damageTaken+=actual;damageSources[lastDamageKind]=(damageSources[lastDamageKind]||0)+actual;if(door){this.hp=1;deathsDoorUsed=true;deathsDoorTicks=60;triggerHitstop(12);if(this.energy>=80)this.energy=100;sfx.playRoar(40);toast(this.energy>=100?'濒死保护：1 秒免伤！怒气满时按 R 激活爆发反击。':'濒死保护：1 秒免伤！能量不足，请移动撤离或争取补给。');return;}damageBase.call(this,Math.max(1,raw*(rubbleTicks>0?.85:1)));};
+Kaiju.prototype.takeDamage=function(raw){if(!gameActive||this.hp<=0||deathsDoorTicks>0||dodgeTicks>0||!Number.isFinite(raw)||raw<=0)return;raw=pressureIncomingDamage(raw,this);const final=effectivePlayerDamage(raw,this);const lethal=final>=this.hp;const door=lethal&&!deathsDoorUsed&&!burstTicks&&!overheatTicks&&this.hp>this.maxHp*.15;const actual=door?this.hp-1:Math.min(this.hp,final);damageTaken+=actual;damageSources[lastDamageKind]=(damageSources[lastDamageKind]||0)+actual;if(door){this.hp=1;deathsDoorUsed=true;deathsDoorTicks=60;triggerHitstop(12);if(this.energy>=80)this.energy=100;sfx.playRoar(40);toast(this.energy>=100?'濒死保护：1 秒免伤！怒气满时按 R 激活爆发反击。':'濒死保护：1 秒免伤！能量不足，请移动撤离或争取补给。');return;}damageBase.call(this,Math.max(1,raw*(rubbleTicks>0?.85:1)));};
 const leechEnter=enterBurst;
 enterBurst=function(){const critical=player&&player.hp<=player.maxHp*.1;const ok=leechEnter();if(ok){leechTicks=critical?300:0;leechRecovered=0;if(critical)toast('绝境爆发：前 5 秒对军队与敌兽造成伤害可恢复生命，最多恢复 15%。');}return ok;};
 function fromPlayer(fn){playerDamageScope++;try{return fn();}finally{playerDamageScope--;}}
@@ -2593,12 +2601,12 @@ const fractureCollapse=IsoBuilding.prototype.collapse;
 IsoBuilding.prototype.collapse=function(x,y){if(this.destroyed)return;const n=fallingBlocks.length;fractureCollapse.call(this,x,y);sfx.material('concrete',true);for(let i=n;i<fallingBlocks.length;i++){const f=fallingBlocks[i];if(f.x===this.wx&&f.y===this.wy){f.structural=true;f.baseHeight=Math.max(10,f.h*.18);}}};
 // Three optional mechanic-changing mutations; effects cannot trigger themselves.
 let echoMutation=false,riposteMutation=false,splitMutation=false,echoWaves=[],echoCooldown=0,riposteTicks=0,splitCooldown=0;
-choices.push({id:'echo',name:'回响重构',text:'第三段轻击在 0.3 秒后追加一次震波（冷却 1.5 秒）。',apply(){echoMutation=true;}},{id:'riposte',name:'闪避蓄势',text:'闪避后 2 秒内下一次命中攻击造成额外冲击，不可叠加。',apply(){riposteMutation=true;}},{id:'scatter',name:'碎裂投射',text:'Q 投掷残骸命中后向前扩散一次碎片伤害（冷却 1 秒）。',apply(){splitMutation=true;}});
+choices.push({id:'echo',name:'回响重构',text:'第三段轻击在 0.3 秒后追加一次震波（冷却 1.5 秒）。',apply(){echoMutation=true;}},{id:'riposte',name:'闪避蓄势',text:'闪避后 2 秒内，下次轻击向瞄准方向突进并附加冲击。',apply(){riposteMutation=true;}},{id:'vortex',name:'聚震连段',text:'第三段轻击命中时，将附近军方单位拉向落点（冷却 2 秒）。',apply(){vortexMutation=true;}});
 const mechanismDodge=dodge;
 dodge=function(){const prior=dodgeCooldown;mechanismDodge();if(riposteMutation&&prior<=0&&dodgeCooldown>0)riposteTicks=120;};
 function mutationImpact(x,y,r,damage,a){fromPlayer(()=>{for(const b of buildings.slice())if(!b.destroyed&&Math.hypot(b.wx-x,b.wy-y)<r+b.widthX*.2)b.takeDamage(damage,x-Math.cos(a)*20,y-Math.sin(a)*20);reaction={angle:a,force:5,stun:14};for(const u of militaryUnits.slice())if(!u.dead&&Math.hypot(u.wx-x,u.wy-y)<r+u.size)u.takeDamage(damage);reaction=null;if(rival&&!rival.dead&&Math.hypot(rival.wx-x,rival.wy-y)<r+35)rival.takeDamage(damage);});addAttackFX(player.type,x,y,0,a,false,3,true);}
 const mechanismStrike=strikeHit;
-strikeHit=function(k,s){mechanismStrike(k,s);if(s.contacts>0&&riposteMutation&&riposteTicks>0){riposteTicks=0;const g=strikeGeometry(k,s);mutationImpact(g.x,g.y,90,65,s.angle);}if(echoMutation&&!s.heavy&&s.stage===3&&echoCooldown<=0){echoCooldown=90;const g=strikeGeometry(k,s);echoWaves.push({x:g.x,y:g.y,a:s.angle,ticks:18});}};
+strikeHit=function(k,s){mechanismStrike(k,s);if(s.contacts>0&&riposteMutation&&riposteTicks>0){riposteTicks=0;const g=strikeGeometry(k,s);mutationImpact(g.x,g.y,90,65,s.angle);}if(s.contacts>0&&echoMutation&&!s.heavy&&s.stage===3&&echoCooldown<=0){echoCooldown=90;const g=strikeGeometry(k,s);echoWaves.push({x:g.x,y:g.y,a:s.angle,ticks:18});}};
 const splittingDebris=IsoDebris.prototype.update;
 IsoDebris.prototype.update=function(){const live=this.active,fast=Math.hypot(this.vx,this.vy)>2,x=this.wx,y=this.wy,a=Math.atan2(this.vy,this.vx),owned=this.playerOwned;splittingDebris.call(this);if(live&&!this.active&&fast&&owned&&splitMutation&&splitCooldown<=0){splitCooldown=60;mutationImpact(x+Math.cos(a)*55,y+Math.sin(a)*55,85,80,a);}};
 const mechanismStart=startGame;
@@ -2854,7 +2862,7 @@ const comfortVignette=drawDangerVignette;
 drawDangerVignette=function(...args){if(experience.flash)comfortVignette(...args);};
 const comfortParticle=IsoParticle.prototype.draw;
 IsoParticle.prototype.draw=function(c){const dust=/^#(?:[789ab][0-9a-f]){3}$/i.test(this.color||'')||['#a39378','#758d95','#9b6452'].includes(this.color);if(dust&&experience.dust===0)return;c.save();if(dust)c.globalAlpha*=experience.dust;comfortParticle.call(this,c);c.restore();};
-const mutationNotes={impact:'重击命中生效；仅重击增伤，轻击不变。',reserve:'攻击命中后回能；能量仍受上限与过热限制。',shell:'连续拆楼触发石甲；只延长持续时间。',mobility:'持续改变移动速度；不增加闪避无敌时间。',echo:'第三段轻击触发；延迟 0.3 秒，冷却 1.5 秒。',riposte:'成功闪避后触发；2 秒内下一次命中消耗，不叠加。',scatter:'投掷命中触发；只扩散一次，冷却 1 秒。'};
+const mutationNotes={impact:'余震半径 115，伤害 85；只由成功命中的重击触发。',reserve:'攻击命中后回能；能量仍受上限与过热限制。',shell:'连续拆楼触发石甲；只延长持续时间。',mobility:'持续改变移动速度；不增加闪避无敌时间。',echo:'第三段轻击触发；延迟 0.3 秒，冷却 1.5 秒。',riposte:'成功闪避后触发；2 秒内下一次命中消耗，不叠加。',vortex:'仅牵引军方单位，不拉动敌兽或穿过建筑。'};
 const clearMutationMenu=openMutation;
 openMutation=function(){clearMutationMenu();offeredMutations.forEach((choice,i)=>document.getElementById('mutation-'+i).textContent=choice.name+' — '+choice.text+'\n'+(mutationNotes[choice.id]||'')+' 本局有效，占用一次突变选择。');};
 const helpfulRender=render;
@@ -2934,7 +2942,7 @@ endGame=function(win){const active=gameActive,secs=Math.floor(missionTicks/60),k
 // Effective damage, rather than button presses, counts as active fighting.
 for(const klass of [IsoBuilding,IsoMilitary,RivalTitan]){const base=klass.prototype.takeDamage;klass.prototype.takeDamage=function(...args){const hp=this.hp;const out=base.apply(this,args);if(activeMode==='endless'&&playerDamageScope>0&&this.hp<hp)endlessLastAction=missionTicks;return out;};}
 const endlessRivalUpdate=RivalTitan.prototype.update;
-RivalTitan.prototype.update=function(){const alive=!this.dead;endlessRivalUpdate.call(this);if(activeMode==='endless'&&alive&&this.dead)nextInvasion=invasionClock+Math.max(2700,6300-endlessPhase*450);};
+RivalTitan.prototype.update=function(){const alive=!this.dead;endlessRivalUpdate.call(this);if(activeMode==='endless'&&alive&&this.dead)nextInvasion=invasionClock+(this.boss?10800:Math.max(2700,6300-endlessPhase*450));};
 const fieldBaseDraw=IsoBuilding.prototype.draw;
 IsoBuilding.prototype.draw=function(c){fieldBaseDraw.call(this,c);if(this.fieldBase&&!this.destroyed&&entityVisible(this)){const p=worldToScreen(this.wx,this.wy,this.heightZ+8);c.save();c.fillStyle='#e6d7ab';c.font='10px system-ui';c.textAlign='center';c.fillText(this.type==='powerplant'?'临时能源站':'军方临时基地',p.x,p.y);c.restore();}};
 // District planning keeps street axes continuous and all large props inside clear parcels.
@@ -3073,7 +3081,7 @@ Object.assign(englishUI,{
 '非官方爱好者原型。巨兽视觉受经典怪兽电影启发；属性、连招及过热规则为本游戏设计，不代表电影官方设定。':'Unofficial fan prototype inspired by classic monster cinema. Stats, combos and overheat rules are original gameplay designs, not official film canon.',
 '怒气与能量独立：有效战斗积累怒气，满后按 R 狂暴 15 秒，随后过热 5 秒。狂暴保留能量，大招消耗原有能量，过热后可重新积累怒气。':'Burst lasts 15 seconds, followed by 5 seconds of overheat. Once per run. Capturing the core unlocks eligibility; full energy is still required.',
 '黄色线表示正在瞄准，红圈表示即将开火。移动离开锁定点，或用 空格闪避。橙色电厂带有闪电标记。':'Yellow lines indicate targeting; red circles indicate imminent fire. Move out of the lock or dodge with SPACE. Orange power plants have lightning markers.',
-'开始引导训练':'Start tutorial','跳过训练，直接行动':'Skip tutorial & deploy','跳过训练':'Skip tutorial','选择本局突变':'Choose a mutation','行动已暂停。每局最多两次，选择立即生效。':'Paused. Up to two picks per run. Your choice applies immediately.',
+'开始引导训练':'Start tutorial','跳过训练，直接行动':'Skip tutorial & deploy','跳过训练':'Skip tutorial','选择本局突变':'Choose a mutation','行动已暂停。选择立即生效；普通模式最多 3 项，无尽模式最多 5 项。':'Paused. Up to two picks per run. Your choice applies immediately.',
 '请结束当前攻击后重试。':'Finish the current attack and try again.',
 '补给车已标记：主动击破可恢复 12% 生命。':'Supply truck marked: destroy it to restore 12% HP.','短暂整备期：15 秒暂停新援军与瞄准，现有炮弹仍有危险。':'15-second respite: reinforcements and new targeting pause. Existing projectiles remain dangerous.',
 '无线电：目标已确认。警戒升级时注意新的火力类型。':'Radio: target confirmed. Watch for new weapons as alert rises.','空格闪避攻击预警 · 摧毁电厂可让重装部队断电':'Dodge incoming attacks with SPACE · Destroy power plants to disable heavy units',
@@ -3304,12 +3312,12 @@ window.addEventListener('pointerup',()=>mutationPointerHeld=false,true);
 window.addEventListener('pointercancel',()=>mutationPointerHeld=false,true);
 window.addEventListener('blur',()=>mutationPointerHeld=false);
 function mutationPanelOpen(){return!document.getElementById('mutationModal').classList.contains('hidden');}
-function updateMutationBadge(){const ready=gameActive&&!training&&!playerDeath&&mutationQueue>0&&mutationCount<2;document.getElementById('mutationBadge').classList.toggle('hidden',!ready||mutationPanelOpen());document.getElementById('mutationBadgeText').textContent=(interfaceLanguage==='en'?'Mutation ready [TAB] · ':'突变就绪 [TAB] · ')+mutationQueue+(interfaceLanguage==='en'?' pending · Used ':' 待领取 · 已选 ')+mutationCount+'/2';}
-openMutation=function(){if(!gameActive||paused||training||playerDeath||mutationQueue<=0||mutationCount>=2)return false;if(player.strike||attackHeld||eHeld||player.isUlting){toast(interfaceLanguage==='en'?'Finish your current action before choosing a mutation.':'请先完成当前攻击或蓄力，再选择突变。');return false;}if(!offeredMutations.length){const pool=choices.slice();for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}offeredMutations=pool.slice(0,3);}paused=true;resetFrameClock();resetAudioPolish();sfx.ctx?.suspend?.();mutationArmAt=performance.now()+400;for(let i=0;i<3;i++){const choice=offeredMutations[i],button=document.getElementById('mutation-'+i);button.textContent=choice.name+' — '+choice.text+'\n'+(mutationNotes[choice.id]||'');button.disabled=true;}document.getElementById('mutationModal').classList.remove('hidden');updateMutationBadge();return true;};
+function updateMutationBadge(){const ready=gameActive&&!training&&!playerDeath&&mutationQueue>0&&mutationCount<mutationLimit();document.getElementById('mutationBadge').classList.toggle('hidden',!ready||mutationPanelOpen());document.getElementById('mutationBadgeText').textContent=(interfaceLanguage==='en'?'Mutation ready [TAB] · ':'突变就绪 [TAB] · ')+mutationQueue+(interfaceLanguage==='en'?' pending · Used ':' 待领取 · 已选 ')+mutationCount+'/'+mutationLimit();}
+openMutation=function(){if(!gameActive||paused||training||playerDeath||mutationQueue<=0||mutationCount>=mutationLimit())return false;if(player.strike||attackHeld||eHeld||player.isUlting){toast(interfaceLanguage==='en'?'Finish your current action before choosing a mutation.':'请先完成当前攻击或蓄力，再选择突变。');return false;}if(!offeredMutations.length){const pool=choices.filter(c=>!selectedMutationIds.has(c.id));for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}offeredMutations=pool.slice(0,3);}paused=true;resetFrameClock();resetAudioPolish();sfx.ctx?.suspend?.();mutationArmAt=performance.now()+400;for(let i=0;i<3;i++){const choice=offeredMutations[i],button=document.getElementById('mutation-'+i);button.classList.toggle('hidden',!choice);button.disabled=true;if(choice)button.textContent=mutationChoiceText(choice);}document.getElementById('mutationModal').classList.remove('hidden');updateMutationBadge();return true;};
 function openMutationManual(){return openMutation();}
 function closeMutationManual(){if(!mutationPanelOpen())return;document.getElementById('mutationModal').classList.add('hidden');resetFrameClock();paused=false;if(gameActive&&sfx.ctx?.state==='suspended')sfx.ctx.resume?.();updateMutationBadge();}
-chooseMutation=function(i){if(!gameActive||!paused||!mutationPanelOpen()||performance.now()<mutationArmAt||mutationPointerHeld||mutationQueue<=0||mutationCount>=2||!Number.isInteger(i))return false;const choice=offeredMutations[i];if(!choice)return false;choice.apply();mutations.push(choice.name);mutationCount++;mutationQueue--;offeredMutations=[];closeMutationManual();toast((interfaceLanguage==='en'?'Mutation selected: ':'本局突变：')+choice.name);return true;};
-window.addEventListener('keydown',e=>{if(e.repeat){if(mutationPanelOpen()&&['Tab','Escape'].includes(e.code))e.preventDefault();return;}if(!document.getElementById('settingsModal').classList.contains('hidden'))return;if(mutationPanelOpen()&&['Tab','Escape'].includes(e.code)){e.preventDefault();closeMutationManual();return;}if(e.code==='Tab'&&gameActive&&!paused&&!training&&!playerDeath&&mutationQueue>0&&mutationCount<2){e.preventDefault();openMutationManual();}});
+chooseMutation=function(i){if(!gameActive||!paused||!mutationPanelOpen()||performance.now()<mutationArmAt||mutationPointerHeld||mutationQueue<=0||mutationCount>=mutationLimit()||!Number.isInteger(i))return false;const choice=offeredMutations[i];if(!choice||selectedMutationIds.has(choice.id))return false;selectedMutationIds.add(choice.id);choice.apply();mutations.push(choice.name);mutationCount++;mutationQueue--;offeredMutations=[];closeMutationManual();toast((interfaceLanguage==='en'?'Mutation selected: ':'本局突变：')+choice.name);return true;};
+window.addEventListener('keydown',e=>{if(e.repeat){if(mutationPanelOpen()&&['Tab','Escape'].includes(e.code))e.preventDefault();return;}if(!document.getElementById('settingsModal').classList.contains('hidden'))return;if(mutationPanelOpen()&&['Tab','Escape'].includes(e.code)){e.preventDefault();closeMutationManual();return;}if(e.code==='Tab'&&gameActive&&!paused&&!training&&!playerDeath&&mutationQueue>0&&mutationCount<mutationLimit()){e.preventDefault();openMutationManual();}});
 const manualMutationStart=startGame;
 startGame=function(){mutationArmAt=0;mutationPointerHeld=false;manualMutationStart();updateMutationBadge();};
 const manualMutationRender=render;
@@ -3390,5 +3398,90 @@ async function toggleGameFullscreen(){
 document.addEventListener('fullscreenchange',()=>{clearInput();resetFrameClock();updateFullscreenControls();});
 const fullscreenLanguage=applyLanguage;applyLanguage=function(...args){const result=fullscreenLanguage.apply(this,args);updateFullscreenControls();return result;};
 updateFullscreenControls();
+
+
+// Yellow telegraphs follow the intended target; final 15 ticks freeze the aim for a dodge window.
+const trackingWarningSim=simulate;
+simulate=function(){
+ if(gameActive&&!paused&&!training){for(const w of warnings){if(w.ticks<=15||w.unit.dead)continue;
+  const target=w.targetRival?(rival&&!rival.dead?rival:null):player;if(!target)continue;
+  const speed={police:7,tank:5.5,heli:6.5,jet:9,maser:11}[w.unit.kind]||7;
+  const travel=Math.hypot(target.wx-w.unit.wx,target.wy-w.unit.wy)/speed;
+  const lead=w.targetRival?0:Math.min(challengeDifficulty==='hard'?22:16,travel*.5);
+  w.x=Math.max(20,Math.min(MAP_SIZE_X-20,target.wx+(target.vx||0)*lead));
+  w.y=Math.max(20,Math.min(MAP_SIZE_Y-20,target.wy+(target.vy||0)*lead));w.z=target.z||0;
+ }}
+ return trackingWarningSim();
+};
+
+
+// Finite, non-repeating mutation progression; old Q-rubble mutations are no longer offered.
+let selectedMutationIds=new Set(),aftershockMutation=false,vortexMutation=false,mutationAftershocks=[],mutationShockCooldown=0,mutationVortexCooldown=0,firstRivalMutation=false,mutationStageReward=0,mutationFeedbackAt=-9999;
+function mutationLimit(){return activeMode==='endless'?5:3;}
+const mutationEnglish={impact:['Fault Aftershock','Heavy hits trigger an 85-damage aftershock after 0.25s (2s cooldown).'],reserve:['Energy Reclaim','Successful melee attacks restore 2 extra Energy; overheat still blocks gains.'],shell:['Rubble Shell','Rubble armor from consecutive demolitions lasts 2s longer.'],mobility:['Evolved Tendons','Movement speed +10%; dodge invulnerability stays unchanged.'],echo:['Resonant Combo','Third light-combo hits emit a delayed shockwave after 0.3s (1.5s cooldown).'],riposte:['Dodge Lunge','Within 2s after dodging, the next light attack lunges; its next hit adds an impact.'],vortex:['Converging Combo','Third light-combo hits pull nearby military toward the impact (2s cooldown).']};
+function mutationChoiceText(c){const en=interfaceLanguage==='en',text=mutationEnglish[c.id];return en&&text?text[0]+' — '+text[1]:c.name+' — '+c.text+'\n'+(mutationNotes[c.id]||'');}
+function queueMutationReward(reason){if(!gameActive||training||mutationCount+mutationQueue>=mutationLimit())return false;mutationQueue++;toast((interfaceLanguage==='en'?'Mutation ready [TAB]: ':'突变就绪 [TAB]：')+reason);return true;}
+function mutationFeedback(id,x,y){if(missionTicks-mutationFeedbackAt<45)return;mutationFeedbackAt=missionTicks;const en=interfaceLanguage==='en',c=choices.find(c=>c.id===id);floatingTexts.push(new FloatingText(x,y,55,en?mutationEnglish[id][0]:c.name,'#b8f5d2',.9));}
+const mutationUpgradeStart=startGame;
+startGame=function(){selectedMutationIds=new Set();aftershockMutation=vortexMutation=false;mutationAftershocks=[];mutationShockCooldown=mutationVortexCooldown=0;firstRivalMutation=false;mutationStageReward=0;mutationFeedbackAt=-9999;mutationUpgradeStart();};
+const mutationRivalDefeat=RivalTitan.prototype.finishDefeat;
+RivalTitan.prototype.finishDefeat=function(){const live=!this.dead;mutationRivalDefeat.call(this);if(live&&this.dead&&!firstRivalMutation){firstRivalMutation=true;queueMutationReward(interfaceLanguage==='en'?'First rival defeated':'首次击败敌兽');}};
+const mutationUpgradeAttack=Kaiju.prototype.performAttack;
+Kaiju.prototype.performAttack=function(heavy=false){const result=mutationUpgradeAttack.call(this,heavy);if(result&&!heavy&&riposteMutation&&riposteTicks>0&&this.strike){this.moveWithCornerSliding(Math.cos(this.aimAngle)*35,Math.sin(this.aimAngle)*35);mutationFeedback('riposte',this.wx,this.wy);}return result;};
+const mutationUpgradeStrike=strikeHit;
+strikeHit=function(k,strike){mutationUpgradeStrike(k,strike);if(k!==player||!strike.contacts)return;const g=strikeGeometry(k,strike);
+ if(aftershockMutation&&strike.heavy&&mutationShockCooldown<=0){mutationShockCooldown=120;mutationAftershocks.push({x:g.x,y:g.y,a:strike.angle,ticks:15});}
+ if(echoMutation&&!strike.heavy&&strike.stage===3)mutationFeedback('echo',g.x,g.y);
+ if(vortexMutation&&!strike.heavy&&strike.stage===3&&mutationVortexCooldown<=0){mutationVortexCooldown=120;for(const u of militaryUnits){if(u.dead)continue;const dx=g.x-u.wx,dy=g.y-u.wy,d=Math.hypot(dx,dy);if(d<1||d>160)continue;const step=Math.min(38,d);if(u.z>0){u.wx+=dx/d*step;u.wy+=dy/d*step;}else{for(let i=0;i<Math.ceil(step/5);i++)challengeSlide(u,dx/d*Math.min(5,step-i*5),dy/d*Math.min(5,step-i*5));}}mutationFeedback('vortex',g.x,g.y);addAttackFX(k.type,g.x,g.y,0,strike.angle,false,3,true);}
+};
+const mutationUpgradeSim=simulate;
+simulate=function(){const before=missionTicks;mutationUpgradeSim();if(!gameActive||paused||training||before===missionTicks)return;
+ if(mutationShockCooldown>0)mutationShockCooldown--;if(mutationVortexCooldown>0)mutationVortexCooldown--;
+ for(const wave of mutationAftershocks)if(--wave.ticks===0){mutationImpact(wave.x,wave.y,115,85,wave.a);mutationFeedback('impact',wave.x,wave.y);}mutationAftershocks=mutationAftershocks.filter(w=>w.ticks>0);
+ if(activeMode==='endless'){const stage=Math.min(2,Math.floor(missionTicks/7200));while(mutationStageReward<stage){mutationStageReward++;queueMutationReward(interfaceLanguage==='en'?'Endless stage reward':'无尽阶段奖励');}}
+};
+const mutationUpgradeRender=render;
+render=function(){mutationUpgradeRender();if(!gameActive)return;const en=interfaceLanguage==='en',items=[...selectedMutationIds].map(id=>en?mutationEnglish[id][0]:choices.find(c=>c.id===id).name);const el=document.getElementById('mutationReadout');el.textContent=(en?'Mutations ':'突变 ')+mutationCount+'/'+mutationLimit()+(items.length?' · '+items.join(' / '):'');el.setAttribute('title',[...selectedMutationIds].map(id=>mutationChoiceText(choices.find(c=>c.id===id))).join('\n'));};
+
+
+// Boss encounters reuse the existing roster, damage, execution and mutation reward paths.
+let bossRequested=false,bossEncounterCount=0;
+function bossMoveNames(r){return interfaceLanguage==='en'?['Pursuit strike','Sweeping strike','Area burst']:r.type==='godzilla'?['贯穿吐息','尾部横扫','核能震荡']:r.type==='kong'?['追击跳砸','横扫重拳','震地爆发']:['俯冲掠袭','翼刃横扫','火山爆发'];}
+function bossCanChallenge(){return gameActive&&!paused&&!training&&!playerDeath&&activeMode==='rampage'&&!rival&&!invasionPending&&invasionCount<2;}
+function requestBossBattle(){if(!bossCanChallenge())return false;bossRequested=true;const ok=prepareInvasion();bossRequested=false;return ok;}
+const bossPrepare=prepareInvasion;
+prepareInvasion=function(){if(activeMode==='rampage'&&!bossRequested)return false;if(activeMode==='survival'&&missionTicks<5400)return false;return bossPrepare();};
+const bossStart=startGame;startGame=function(){bossRequested=false;bossEncounterCount=0;bossStart();if(activeMode==='survival'||activeMode==='endless')nextInvasion=5400;};
+function initializeBoss(r){r.boss=true;r.bossPhase=1;r.bossStep=0;r.bossMove=0;r.maxHp=Math.round(r.maxHp*1.35);r.hp=r.maxHp;r.timer=75;r.bossFollowup=false;bossEncounterCount++;toast(interfaceLanguage==='en'?'Boss approaching: read its attacks and punish recovery.':'Boss 接近：观察蓄力，抓住收招破绽！');}
+function beginBossMove(r){r.bossPhase=r.hp<=r.maxHp*.5?2:1;const sequence=r.bossPhase===2?[0,1,0,2]:[0,1,2];r.bossMove=sequence[r.bossStep++%sequence.length];r.state='windup';r.timer=r.bossMove===2?90:66;const dx=player.wx-r.wx,dy=player.wy-r.wy,d=Math.max(1,Math.hypot(dx,dy)),reach=Math.min(460,d);r.angle=Math.atan2(dy,dx);r.origin={x:r.wx,y:r.wy};r.target={x:r.wx+dx/d*reach,y:r.wy+dy/d*reach};r.bossHit=false;}
+const bossUpdate=RivalTitan.prototype.update;
+RivalTitan.prototype.update=function(){
+ if(!this.boss&&activeMode!=='blitz')initializeBoss(this);
+ if(!this.boss||this.dying>0||this.dead)return bossUpdate.call(this);
+ this.age++;this.anim+=.08;if(this.flash>0)this.flash--;if(this.hitClock>0)this.hitClock--;
+ if(this.stun>0){this.stun--;return;}
+ if(this.hp<=this.maxHp*.5&&this.bossPhase===1){this.bossPhase=2;toast(interfaceLanguage==='en'?'Boss phase 2: pursuit and sweep combinations.':'Boss 第二阶段：追击与横扫交替，注意后续攻击！');}
+ if(this.state==='approach'){const dx=player.wx-this.wx,dy=player.wy-this.wy,d=Math.max(1,Math.hypot(dx,dy));this.angle=Math.atan2(dy,dx);if(d>350){const step=this.type==='wyvern'?3.8:2.3,nx=this.wx+dx/d*step,ny=this.wy+dy/d*step;if(this.type==='wyvern'){this.wx=nx;this.wy=ny;}else{challengeSlide(this,nx-this.wx,ny-this.wy);if(this.age%45===0){const b=buildings.find(b=>!b.destroyed&&Math.hypot(b.wx-this.wx,b.wy-this.wy)<150);if(b)b.takeDamage(180,this.wx,this.wy);}}}if(--this.timer<=0&&d<680)beginBossMove(this);}
+ else if(this.state==='windup'){if(--this.timer<=0){this.state='attack';this.timer=36;this.hitClock=0;}}
+ else if(this.state==='attack'){
+  const move=this.bossMove;
+  if(move===0&&this.type!=='godzilla'){const t=1-this.timer/36;const x=this.origin.x+(this.target.x-this.origin.x)*t,y=this.origin.y+(this.target.y-this.origin.y)*t;if(this.type==='kong'){this.wx=x;this.wy=y;this.z=Math.sin(t*Math.PI)*90;}else{this.wx=x;this.wy=y;this.z=42;}if(this.timer===1){this.z=this.type==='wyvern'?42:0;this.impact(this.target.x,this.target.y,125,95);addAttackFX(this.type,this.wx,this.wy,0,this.angle,true,3,true);}}
+  else if(move===0){if(this.timer===36||this.timer===12){for(let i=70;i<=600;i+=60)this.impact(this.wx+Math.cos(this.angle)*i,this.wy+Math.sin(this.angle)*i,45,38);addAttackFX(this.type,this.wx+Math.cos(this.angle)*260,this.wy+Math.sin(this.angle)*260,15,this.angle,true,3,true);}}
+  else if(!this.bossHit){this.bossHit=true;if(move===1){for(const offset of [-.9,-.45,0,.45,.9])this.impact(this.wx+Math.cos(this.angle+offset)*120,this.wy+Math.sin(this.angle+offset)*120,85,75);}else this.impact(this.wx,this.wy,230,110);addAttackFX(this.type,this.wx,this.wy,0,this.angle,true,3,true);}
+  if(--this.timer<=0){this.state='recover';this.timer=this.bossMove===2?120:85;this.z=this.type==='wyvern'?42:0;}
+ }else if(--this.timer<=0){this.state='approach';this.timer=this.bossPhase===2?45:70;}
+ this.wx=Math.max(35,Math.min(MAP_SIZE_X-35,this.wx));this.wy=Math.max(35,Math.min(MAP_SIZE_Y-35,this.wy));
+};
+const bossShoot=IsoMilitary.prototype.shoot;
+IsoMilitary.prototype.shoot=function(d){if(rival?.boss&&['windup','attack'].includes(rival.state)&&['tank','maser','jet'].includes(this.kind)&&(!this.focus||this.focus===player||this.focus.dead))return;return bossShoot.call(this,d);};
+const bossDefeat=RivalTitan.prototype.finishDefeat;
+RivalTitan.prototype.finishDefeat=function(){const live=!this.dead;bossDefeat.call(this);if(live&&this.dead&&this.boss&&activeMode==='endless')nextInvasion=invasionClock+10800;};
+const bossRender=render;render=function(){bossRender();document.getElementById('bossChallengeButton').classList.toggle('hidden',!bossCanChallenge());if(!gameActive||!rival?.boss)return;const r=rival,en=interfaceLanguage==='en';document.getElementById('rivalTitle').textContent='BOSS · '+rivalNames[r.type]+' · '+(en?'Phase ':'阶段 ')+r.bossPhase+' · '+Math.ceil(r.hp)+' / '+r.maxHp;document.getElementById('rivalHint').textContent=r.dying>0?(en?'Approach and execute with your execution key':'靠近并按终结键处决'):r.state==='recover'?(en?'Opening: damage +40%':'破绽：承受伤害 +40%'):bossMoveNames(r)[r.bossMove]+(en?' · Dodge the marked area':' · 避开标记区域');
+ if(!['windup','attack'].includes(r.state))return;ctx.save();ctx.translate(-camera.x,-camera.y);ctx.strokeStyle=r.state==='windup'?'#ffd078':'#ff796a';ctx.lineWidth=3;ctx.setLineDash(r.state==='windup'?[8,5]:[]);const p=worldToScreen(r.wx,r.wy,0),t=worldToScreen(r.target.x,r.target.y,0);ctx.beginPath();
+ if(r.bossMove===2)ctx.ellipse(p.x,p.y,230*COS_ISO*Math.SQRT2,230*SIN_ISO*Math.SQRT2,0,0,Math.PI*2);
+ else if(r.bossMove===0&&r.type!=='godzilla')ctx.ellipse(t.x,t.y,125*COS_ISO*Math.SQRT2,125*SIN_ISO*Math.SQRT2,0,0,Math.PI*2);
+ else if(r.bossMove===0){ctx.moveTo(p.x,p.y);const q=worldToScreen(r.wx+Math.cos(r.angle)*650,r.wy+Math.sin(r.angle)*650,0);ctx.lineTo(q.x,q.y);}
+ else{for(const offset of [-.9,-.45,0,.45,.9]){const q=worldToScreen(r.wx+Math.cos(r.angle+offset)*120,r.wy+Math.sin(r.angle+offset)*120,0);ctx.moveTo(q.x+85*COS_ISO*Math.SQRT2,q.y);ctx.ellipse(q.x,q.y,85*COS_ISO*Math.SQRT2,85*SIN_ISO*Math.SQRT2,0,0,Math.PI*2);}}
+ ctx.stroke();ctx.restore();};
 
 </script></body></html>
