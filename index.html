@@ -2350,7 +2350,7 @@ const rivalNames={godzilla:'哥斯拉',kong:'金刚',wyvern:'拉顿'};
 function invasionPoint(){const candidates=[{x:90,y:MAP_SIZE_Y/2},{x:MAP_SIZE_X-90,y:MAP_SIZE_Y/2},{x:MAP_SIZE_X/2,y:90},{x:MAP_SIZE_X/2,y:MAP_SIZE_Y-90}];return candidates.sort((a,b)=>Math.hypot(b.x-player.wx,b.y-player.wy)-Math.hypot(a.x-player.wx,a.y-player.wy))[Math.floor(Math.random()*2)];}
 function prepareInvasion(){if(rival||invasionPending||(activeMode!=='endless'&&invasionCount>=2)||training||(activeMode!=='endless'&&player.hp<player.maxHp*.35))return false;const roster=['godzilla','kong','wyvern'].filter(t=>t!==player.type);const type=roster[Math.floor(Math.random()*roster.length)],p=invasionPoint();invasionPending={type,x:p.x,y:p.y,ticks:480};toast('巨兽入侵预警：'+rivalNames[type]+'将在 8 秒后进入地图边缘！');return true;}
 class RivalTitan{constructor(type,x,y){this.type=type;this.wx=x;this.wy=y;this.z=type==='wyvern'?46:0;this.maxHp=type==='kong'?2400:type==='godzilla'?2200:1700;this.hp=this.maxHp;this.size=48;this.angle=0;this.anim=0;this.state='approach';this.timer=100;this.age=0;this.stun=0;this.dead=false;this.target={x,y};this.hitClock=0;}
- takeDamage(amount,sourceX=player.wx,sourceY=player.wy){if(this.dead)return;const incoming=Math.atan2(sourceY-this.wy,sourceX-this.wx);const front=Math.cos(incoming-this.angle)>.45;const weakness=this.state==='recover';const damage=Math.max(1,Math.round(amount*(weakness?1.4:front&&this.type==='godzilla'?.65:1)));this.hp-=damage;this.flash=8;if(weakness&&amount>200)this.stun=Math.max(this.stun,10);if(this.hp<=0){this.hp=0;this.dead=true;rivalsDefeated++;const healed=Math.min(Math.ceil(player.maxHp*.08),player.maxHp-player.hp);player.hp+=healed;player.energy=Math.min(100,player.energy+30);toast('击退 '+rivalNames[this.type]+'！恢复 '+healed+' 生命与 30 能量。');addAttackFX(this.type,this.wx,this.wy,0,this.angle,true,3,true);nextInvasion=invasionClock+7200;}}
+ takeDamage(amount,sourceX=player.wx,sourceY=player.wy,resolvedDamage){if(this.dead)return;const incoming=Math.atan2(sourceY-this.wy,sourceX-this.wx);const front=Math.cos(incoming-this.angle)>.45;const weakness=this.state==='recover';const damage=resolvedDamage??Math.max(1,Math.round(amount*(weakness?1.4:front&&this.type==='godzilla'?.65:1)));this.hp-=damage;this.flash=8;if(weakness&&amount>200)this.stun=Math.max(this.stun,10);if(this.hp<=0){this.hp=0;this.dead=true;rivalsDefeated++;const healed=Math.min(Math.ceil(player.maxHp*.08),player.maxHp-player.hp);player.hp+=healed;player.energy=Math.min(100,player.energy+30);toast('击退 '+rivalNames[this.type]+'！恢复 '+healed+' 生命与 30 能量。');addAttackFX(this.type,this.wx,this.wy,0,this.angle,true,3,true);nextInvasion=invasionClock+7200;}}
  chooseTarget(){let t={x:player.wx,y:player.wy};let best=Math.hypot(t.x-this.wx,t.y-this.wy);for(const u of militaryUnits){const d=Math.hypot(u.wx-this.wx,u.wy-this.wy)*1.2;if(d<best){best=d;t={x:u.wx,y:u.wy};}}return t;}
  impact(x,y,r,damage){if(this.hitClock<=0&&Math.hypot(player.wx-x,player.wy-y)<r+player.size){lastDamageKind='rival';player.takeDamage(damage);this.hitClock=22;}for(const b of buildings.slice())if(!b.destroyed&&Math.hypot(b.wx-x,b.wy-y)<r+b.widthX*.25)b.takeDamage(damage*2.5,this.wx,this.wy);for(const u of militaryUnits.slice())if(!u.dead&&Math.hypot(u.wx-x,u.wy-y)<r+u.size)u.takeDamage(damage*3);}
  update(){if(this.dead)return;this.age++;this.anim+=.08;if(this.flash>0)this.flash--;if(this.hitClock>0)this.hitClock--;if(this.stun>0){this.stun--;return;}if(this.age>4500){this.dead=true;nextInvasion=invasionClock+7200;toast(rivalNames[this.type]+'已撤离城区。');return;}const t=this.chooseTarget(),d=Math.hypot(t.x-this.wx,t.y-this.wy);if(this.state==='approach'){this.angle=Math.atan2(t.y-this.wy,t.x-this.wx);const speed=this.type==='wyvern'?3.6:2;const nx=this.wx+Math.cos(this.angle)*speed,ny=this.wy+Math.sin(this.angle)*speed;if(this.type==='wyvern'||navFree(nx,ny,30)){this.wx=nx;this.wy=ny;}else if(this.age%30===0){const b=buildings.find(b=>!b.destroyed&&Math.hypot(b.wx-this.wx,b.wy-this.wy)<160);if(b)b.takeDamage(120,this.wx,this.wy);}if(--this.timer<=0&&d<(this.type==='godzilla'?650:450)){this.state='windup';this.timer=this.type==='kong'?48:60;this.target={...t};this.origin={x:this.wx,y:this.wy};this.angle=Math.atan2(t.y-this.wy,t.x-this.wx);}}
@@ -2410,8 +2410,61 @@ const landmarkDraw=IsoBuilding.prototype.draw;
 IsoBuilding.prototype.draw=function(c){landmarkDraw.call(this,c);if(this.landmark&&!this.destroyed){const p=worldToScreen(this.wx,this.wy,this.heightZ+12);c.save();c.fillStyle='#cce6d8';c.font='10px system-ui';c.textAlign='center';c.fillText('◆ '+this.landmark,p.x,p.y);c.restore();}};
 // One recoverable finishing window, rather than instant removal or a map-wide kill.
 RivalTitan.prototype.finishDefeat=function(){if(this.dead)return;this.dying=0;this.hp=0;this.dead=true;rivalsDefeated++;player.hp=Math.min(player.maxHp,player.hp+Math.ceil(player.maxHp*.08));player.energy=Math.min(100,player.energy+30);nextInvasion=invasionClock+7200;toast('击退 '+rivalNames[this.type]+'：恢复生命与能量。');};
-const deathDamage=RivalTitan.prototype.takeDamage;
-RivalTitan.prototype.takeDamage=function(n,x,y){if(this.dead||this.dying>0)return;const incoming=Math.atan2((y??player.wy)-this.wy,(x??player.wx)-this.wx);const front=Math.cos(incoming-this.angle)>.45;const d=Math.max(1,Math.round(n*(this.state==='recover'?1.4:front&&this.type==='godzilla'?.65:1)));if(this.hp-d<=0){this.hp=1;this.dying=180;this.state='recover';toast('终结窗口：3 秒内靠近敌兽按 Q！');return;}deathDamage.call(this,n,x,y);};
+// One cast has one damage budget per rival, measured after combat modifiers.
+let rivalUltimateDamageBudget = null;
+
+const startTrackedUltimate = Kaiju.prototype.triggerUltimate;
+Kaiju.prototype.triggerUltimate = function () {
+  const wasUlting = this.isUlting;
+  const result = startTrackedUltimate.call(this);
+  if (!wasUlting && this.isUlting) this.rivalUltimateDamage = new WeakMap();
+  return result;
+};
+
+function withRivalUltimateBudget(kaiju, action) {
+  const previous = rivalUltimateDamageBudget;
+  if (kaiju.isUlting) rivalUltimateDamageBudget = kaiju.rivalUltimateDamage;
+  try {
+    return action();
+  } finally {
+    rivalUltimateDamageBudget = previous;
+  }
+}
+
+const trackedUltimateTick = Kaiju.prototype.tickUltimate;
+Kaiju.prototype.tickUltimate = function () {
+  return withRivalUltimateBudget(this, () => trackedUltimateTick.call(this));
+};
+
+const trackedUltimateLanding = Kaiju.prototype.executeKongLandingShockwave;
+Kaiju.prototype.executeKongLandingShockwave = function () {
+  return withRivalUltimateBudget(this, () => trackedUltimateLanding.call(this));
+};
+
+const deathDamage = RivalTitan.prototype.takeDamage;
+RivalTitan.prototype.takeDamage = function (amount, sourceX = player.wx, sourceY = player.wy) {
+  if (this.dead || this.dying > 0) return;
+  const incoming = Math.atan2(sourceY - this.wy, sourceX - this.wx);
+  const front = Math.cos(incoming - this.angle) > .45;
+  const multiplier = this.state === 'recover' ? 1.4 : front && this.type === 'godzilla' ? .65 : 1;
+  let damage = Math.max(1, Math.round(amount * multiplier));
+  const budget = rivalUltimateDamageBudget;
+  if (budget) {
+    const spent = budget.get(this) ?? 0;
+    const limit = Math.floor(this.maxHp * (this.boss ? .35 : .45));
+    damage = Math.min(damage, limit - spent);
+    if (damage <= 0) return;
+    budget.set(this, spent + damage);
+  }
+  if (this.hp <= damage) {
+    this.hp = 1;
+    this.dying = 180;
+    this.state = 'recover';
+    toast('终结窗口：3 秒内靠近敌兽按 Q！');
+    return;
+  }
+  deathDamage.call(this, amount, sourceX, sourceY, damage);
+};
 const dyingUpdate=RivalTitan.prototype.update;
 RivalTitan.prototype.update=function(){if(this.dying>0){if(--this.dying<=0)this.finishDefeat();return;}dyingUpdate.call(this);};
 // Military targets are held for 2 seconds and reconsidered using distance and recent threat.
